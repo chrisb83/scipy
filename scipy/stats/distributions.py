@@ -5215,7 +5215,8 @@ class norminvgauss_gen(rv_continuous):
     The usual probability density parametrisation for a
     Normal Inverse Gaussian (NIG) distribution is given by::
 
-        NIG.pdf(x; mu, a, b, d) = (a * d / pi) * k_1 * a * sqrt(d**2 + (x - mu)**2)
+        NIG.pdf(x; mu, a, b, d) = (a * d / pi) * k_1 * a *
+                                  sqrt(d**2 + (x - mu)**2)
                                   * exp(d * sqrt(a**2 - b**2) + b * (x - mu))
                                   / sqrt(d**2 + (x - mu)**2)
 
@@ -5232,14 +5233,19 @@ class norminvgauss_gen(rv_continuous):
 
     The pdf of `norminvgauss` is the scale invariant centered NIG.pdf::
 
-        norminvgauss.pdf(x, a, b) = NIG.pdf(x;0, a, b, 1)
+        norminvgauss.pdf(x, a, b) = NIG.pdf(x; 0, a, b, 1)
                                   = a/pi * k_1 * (a * sqrt(1 + x**2))
                                     * exp(sqrt(a**2 - b**2) + b * x)
                                     / sqrt(1 + x**2)
 
     Hence::
 
-        NIG.pdf(x; mu, a, b, d)= norminvgauss.pdf(x, a*d, b*d, loc=mu/d, scale=d)
+        NIG.pdf(x; mu, a, b, d) =
+        norminvgauss.pdf(x, a*d, b*d, loc=mu, scale=d)
+
+    A normal inverse Gaussian random variable with parameters a and b can
+    be expressed  as ``X = b * V + sqrt(V) * X`` where ``X`` is ``norm(0,1)``
+    and ``V`` is ``invgauss(mu=1/sqrt(a**2 - b**2))``.
 
     %(example)s
 
@@ -5251,8 +5257,7 @@ class norminvgauss_gen(rv_continuous):
         gamma = sqrt(a**2 - b**2)
         x_min = b / gamma - (sqrt(3) * a**2 / gamma**3)
         x_max = b / gamma + (sqrt(3) * a**2 / gamma**3)
-        x_opt = optimize.minimize_scalar(lambda x:
-                                         - self._logpdf(x, a, b),
+        x_opt = optimize.minimize_scalar(lambda x: -self._logpdf(x, a, b),
                                          bounds=(x_min, x_max),
                                          method='bounded').x
         return x_opt
@@ -5281,6 +5286,12 @@ class norminvgauss_gen(rv_continuous):
         else:
             h = integrate.quad(self._pdf, x, np.inf, args=(a, b))[0]
             return 1 - h
+
+    def _rvs(self, a, b):
+        # note: X = b * V + sqrt(V) * X is norminvgaus(a,b) if X is standard
+        # normal and V is invgauss(mu=1/sqrt(a**2 - b**2))
+        r_invgauss = invgauss.rvs(mu=1/sqrt(a**2 - b**2), size=self._size)
+        return b * r_invgauss + sqrt(r_invgauss) * norm.rvs(size=self._size)
 
     def _stats(self, a, b):
         gamma = sqrt(a**2 - b**2)
