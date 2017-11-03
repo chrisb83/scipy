@@ -22,7 +22,7 @@ __all__ = ['multivariate_normal',
            'special_ortho_group',
            'ortho_group',
            'random_correlation',
-           'normal_invgamma']
+           'norminvgamma']
 
 _LOG_2PI = np.log(2 * np.pi)
 _LOG_2 = np.log(2)
@@ -3561,7 +3561,7 @@ nig_docdict_noparams = {
 }
 
 
-class normal_invgamma_gen(multi_rv_generic):
+class norminvgamma_gen(multi_rv_generic):
     r"""
     A normal inverse gamma random variable.
 
@@ -3572,18 +3572,18 @@ class normal_invgamma_gen(multi_rv_generic):
     ``logpdf(x, sig2, loc=0, variance_scale=1, shape=1, scale=1)``
         Log of the probability density function.
     ``rvs(loc=0, variance_scale=1, shape=1, scale=1, size=1, random_state=None)``
-        Draw random samples from normal and inverse gamma distribution.
+        Draw random samples from normal inverse gamma distribution.
     ``mean(loc=0, variance_scale=1, shape=1, scale=1)``
-        Mean of the random variates.
+        Mean of the random variable.
     ``mode(loc=0, variance_scale=1, shape=1, scale=1)``
-        Mode of the random variates.
+        Mode of the random variable.
 
     Parameters
     ----------
     x : array
-            One-dimensional array.
+        One-dimensional array.
     sig2 : array
-            One-dimensional array.
+        One-dimensional array.
     %(_nig_doc_default_callparams)s
     %(_doc_random_state)s
 
@@ -3591,7 +3591,7 @@ class normal_invgamma_gen(multi_rv_generic):
     loc, variance_scale, shape, scale parameters, returning a "frozen"
     normal inverse gamma random variable:
 
-    rv = normal_invgamma(loc=0, variance_scale=1, shape=1, scale=1)
+    rv = norminvgamma(loc=0, variance_scale=1, shape=1, scale=1)
         - Frozen object with the same methods but holding the given
           loc, variance_scale, shape, scale.
 
@@ -3599,7 +3599,7 @@ class normal_invgamma_gen(multi_rv_generic):
     -----
     %(_nig_doc_callparams_note)s
 
-    The probability density function for `normal_invgamma` is
+    The probability density function for `norminvgamma` is
 
     .. math::
 
@@ -3608,9 +3608,9 @@ class normal_invgamma_gen(multi_rv_generic):
                         {\alpha + 1}\exp \left( \frac { -\beta}{\sigma^2} -
                         \frac{(x - \mu)^2} {2\sigma^2\nu}  \right),
 
-    where :math:`\mu` is the loc, :math:`\nu` the variance scale,
-    :math:`\alpha` the shape, :math:`\beta` the scale and :math:`x` and
-    `\sigma^2` takes values.
+    where :math:`\mu` is the loc, :math:`\nu > 0` the variance scale,
+    :math:`\alpha > 0` the shape, :math:`\beta > 0` the scale. The variable
+    :math:`x` is a real number and :math:`\sigma^2 > 0`.
 
     .. versionadded:: 0.19.0
 
@@ -3618,11 +3618,12 @@ class normal_invgamma_gen(multi_rv_generic):
     --------
     >>> import matplotlib.pyplot as plt
     >>> from mpl_toolkits.mplot3d import axes3d
-    >>> from scipy.stats import normal_invgamma
+    >>> from scipy.stats import norminvgamma
     >>> x = np.linspace(0, 5, 10, endpoint=False)
     >>> sig2 = np.linspace(5, 10, 10, endpoint=False)
-    >>> z = normal_invgamma.pdf(x, sig2, loc=2,
-                                    variance_scale=3, shape=5, scale=2); z
+    >>> z = norminvgamma.pdf(x, sig2, loc=2, variance_scale=3, 
+    ...                      shape=5, scale=2)
+    >>> z
     array([  5.15655226e-06,   3.07181064e-06,   1.87273568e-06,
          1.16664399e-06,   7.41424234e-07,   4.79916138e-07,
          3.15923431e-07,   2.11211796e-07,   1.43229349e-07,
@@ -3630,21 +3631,22 @@ class normal_invgamma_gen(multi_rv_generic):
     >>> fig = plt.figure()
     >>> ax = fig.add_subplot(111, projection='3d')
     >>> ax.plot_surface(x, sig2, z)
+    >>> plt.show()
 
-    """   
+    """
     def __init__(self, seed=None):
-        super(normal_invgamma_gen, self).__init__(seed)
+        super(norminvgamma_gen, self).__init__(seed)
         self.__doc__ = doccer.docformat(self.__doc__, nig_docdict_params)
 
     def __call__(self, loc=0, variance_scale=1, shape=1, scale=1, seed=None):
         """
         Create a frozen normal inverse gamma distribution.
 
-        See `normal_invgamma_frozen` for more information.
+        See `norminvgamma_frozen` for more information.
 
         """
-        return normal_invgamma_frozen(loc, variance_scale, shape, scale,
-                                    seed=seed)
+        return norminvgamma_frozen(loc, variance_scale, shape, scale,
+                                   seed=seed)
 
     def _check_parameters(self, loc, variance_scale, shape, scale):
         if not np.isscalar(loc):
@@ -3689,8 +3691,8 @@ class normal_invgamma_gen(multi_rv_generic):
                                                     loc, variance_scale, shape, scale)
         x, sig2 = self._check_input(x, sig2)
 
-        Zinv = shape * np.log(scale) - gammaln(shape) - 0.5 * (np.log(variance_scale) + _LOG_2PI)
-        out = Zinv - 0.5 * np.log(sig2) - (shape + 1.) * np.log(sig2) -\
+        zinv = shape * np.log(scale) - gammaln(shape) - 0.5 * (np.log(variance_scale) + _LOG_2PI)
+        out = zinv - 0.5 * np.log(sig2) - (shape + 1.) * np.log(sig2) -\
                 scale/sig2 - 0.5/(sig2 * variance_scale) * (x-loc)**2
         return out
 
@@ -3746,7 +3748,7 @@ class normal_invgamma_gen(multi_rv_generic):
 
         sig2_rv = 1/random_state.gamma(shape, scale, size)
         x_rv = random_state.normal(loc, np.sqrt(sig2_rv * variance_scale), size)
-        return np.array(list(zip(x_rv, sig2_rv)))
+        return x_rv, sig2_rv
 
     def mean(self, loc=0, variance_scale=1, shape=1, scale=1):
         """
@@ -3800,23 +3802,23 @@ class normal_invgamma_gen(multi_rv_generic):
         return x_mode, sig2_mode
 
 
-normal_invgamma = normal_invgamma_gen()
+norminvgamma = norminvgamma_gen()
 
 
-class normal_invgamma_frozen(multi_rv_frozen):
+class norminvgamma_frozen(multi_rv_frozen):
     """
     Create a frozen normal inverse gamma distribution.
 
     Parameters
     ----------
     loc : float, optional
-        Mean of the distribution (default zero)
+        Mean of the distribution (default is zero)
     variance_scale : positive float, optional
-        Scale on normal distribution prior (default one)
+        Scale on normal distribution prior (default is one)
     shape : positive float, optional
-        Shape of the distribution (default one)
+        Shape of the distribution (default is one)
     scale : positive float, optional
-        Scale on inverse gamma distribution prior (default one)
+        Scale on inverse gamma distribution prior (default is one)
     seed : None or int or np.random.RandomState instance, optional
         This parameter defines the RandomState object to use for drawing
         random variates.
@@ -3829,8 +3831,8 @@ class normal_invgamma_frozen(multi_rv_frozen):
     When called with the default parameters, this will create a 2D random
     variable with loc 0, variance_scale 1, shape 1, scale 1:
 
-    >>> from scipy.stats import normal_invgamma
-    >>> r = normal_invgamma()
+    >>> from scipy.stats import norminvgamma
+    >>> r = norminvgamma()
     >>> r.loc
     0
     >>> r.variance_scale
@@ -3843,7 +3845,7 @@ class normal_invgamma_frozen(multi_rv_frozen):
     """
     def __init__(self, loc=0, variance_scale=1, shape=1, scale=1, seed=None):
         
-        self._dist = normal_invgamma_gen(seed)
+        self._dist = norminvgamma_gen(seed)
         self.loc, self.variance_scale, self.shape, self.scale = self._dist._check_parameters(
                                                             loc, variance_scale, shape, scale)
 
@@ -3866,9 +3868,9 @@ class normal_invgamma_frozen(multi_rv_frozen):
         return self._dist.mode(self.loc, self.variance_scale, self.shape, self.scale)
 
 # Set frozen generator docstrings from corresponding docstrings in
-# normal_invgamma_gen and fill in default strings in class docstrings
+# norminvgamma_gen and fill in default strings in class docstrings
 for name in ['logpdf', 'pdf', 'rvs']:
-    method = normal_invgamma_gen.__dict__[name]
-    method_frozen = normal_invgamma_frozen.__dict__[name]
+    method = norminvgamma_gen.__dict__[name]
+    method_frozen = norminvgamma_frozen.__dict__[name]
     method_frozen.__doc__ = doccer.docformat(method.__doc__, nig_docdict_noparams)
     method.__doc__ = doccer.docformat(method.__doc__, nig_docdict_params)
