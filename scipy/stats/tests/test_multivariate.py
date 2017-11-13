@@ -18,7 +18,7 @@ import numpy as np
 
 import scipy.linalg
 from scipy.stats._multivariate import _PSD, _lnB
-from scipy.stats import multivariate_normal
+from scipy.stats import multivariate_normal, norminvgamma
 from scipy.stats import matrix_normal
 from scipy.stats import special_ortho_group, ortho_group
 from scipy.stats import random_correlation
@@ -1585,3 +1585,53 @@ def test_random_state_property():
     for distfn, args in dists:
         check_random_state_property(distfn, args)
         check_pickling(distfn, args)
+
+
+class TestNormInverseGamma(object):
+    def test_input_shape(self):
+        x = np.arange(3)
+        sigma2 = np.arange(2)
+        assert_raises(ValueError, norminvgamma.pdf, x, sigma2, 0, 1, 2, 3)
+        assert_raises(ValueError, norminvgamma.logpdf, x, sigma2, 0, 1, 2, 3)
+
+    def test_param_values(self):
+        x, sigma2 = 1, 1
+        # only positive values allowed for scale_x, a, b
+        assert_raises(ValueError, norminvgamma.pdf, x, sigma2, 0, -1, 2, 3)
+        assert_raises(ValueError, norminvgamma.pdf, x, sigma2, 0, 1, -2, 3)
+        assert_raises(ValueError, norminvgamma.pdf, x, sigma2, 0, 1, 2, -3)
+        assert_raises(ValueError, norminvgamma.pdf, x, sigma2, 0, 0, 2, 3)
+        assert_raises(ValueError, norminvgamma.pdf, x, sigma2, 0, 1, 0, 3)
+        assert_raises(ValueError, norminvgamma.pdf, x, sigma2, 0, 1, 1, 0)
+
+    def test_scalar_values(self):
+        # When evaluated on scalar data, the pdf should return a scalar
+        np.random.seed(1234)
+        x, sigma2 = 1, 1
+        loc_x, scale_x, a, b = 0, 1, 2, 1
+        pdf = norminvgamma.pdf(x, sigma2, loc_x, scale_x, a, b)
+        logpdf = norminvgamma.logpdf(x, sigma2, loc_x, scale_x, a, b)
+        assert_equal(pdf.ndim, 0)
+        assert_equal(logpdf.ndim, 0)
+
+    def test_logpdf(self):
+        # Check that the log of the pdf is in fact the logpdf
+        np.random.seed(1234)
+        x = np.random.randn(5)
+        d1 = norminvgamma.logpdf(x, np.abs(x), 0, 1, 2, 3)
+        d2 = norminvgamma.pdf(x, np.abs(x), 0, 1, 2, 3)
+        assert_allclose(d1, np.log(d2))
+
+    def test_broadcasting(self):
+        pass
+
+    def test_frozen(self):
+        # The frozen distribution should agree with the regular one
+        np.random.seed(1234)
+        x = np.random.randn(5)
+        sigma2 = np.abs(x)
+        nig_frozen = norminvgamma(0, 1, 2, 3)
+        assert_allclose(nig_frozen.pdf(x, sigma2),
+                        norminvgamma.pdf(x, sigma2, 0, 1, 2, 3))
+        assert_allclose(nig_frozen.logpdf(x, sigma2),
+                        norminvgamma.logpdf(x, sigma2, 0, 1, 2, 3))

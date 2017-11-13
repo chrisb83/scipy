@@ -7,7 +7,7 @@ import math
 import numpy as np
 import scipy.linalg
 from scipy.misc import doccer
-from scipy.special import gammaln, psi, multigammaln, xlogy, entr
+from scipy.special import entr, gamma, gammaln, multigammaln, psi, xlogy
 from scipy._lib._util import check_random_state
 from scipy.linalg.blas import drot
 
@@ -23,7 +23,8 @@ __all__ = ['multivariate_normal',
            'special_ortho_group',
            'ortho_group',
            'random_correlation',
-           'unitary_group']
+           'unitary_group',
+           'norminvgamma']
 
 _LOG_2PI = np.log(2 * np.pi)
 _LOG_2 = np.log(2)
@@ -3752,3 +3753,406 @@ class unitary_group_gen(multi_rv_generic):
         return q
 
 unitary_group = unitary_group_gen()
+
+
+_doc_random_state = """\
+random_state : None or int or np.random.RandomState instance, optional
+    If int or RandomState, use it for drawing the random variates.
+    If None (or np.random), the global np.random state is used.
+    Default is None.
+"""
+
+def _squeeze_output(out):
+    """
+    Remove single-dimensional entries from array and convert to scalar,
+    if necessary.
+
+    """
+    out = out.squeeze()
+    if out.ndim == 0:
+        out = out[()]
+    return out
+
+_nig_doc_default_callparams = """\
+loc_x : array_like, optional
+    Mean of the Gaussian distribution (default is zero)
+scale_x : array_like, only positive values, optional
+    Scale on normal distribution prior (default is one)
+a : array_like, only positive values, optional
+    Shape of the inverse gamma distribution (default is one)
+b : array_like, only positive values, optional
+    Scale of inverse gamma distribution (default is one)
+"""
+
+_nig_doc_callparams_note = \
+    """The parameters `loc_x` and `scale_x` serves as the
+    hyperparameters for normal distribution which models the
+    unknown mean. The parameters `a` and `b` serve as
+    the hyperparameters for inverse gamma distribution which
+    models the unknown variance.
+    """
+
+_nig_doc_frozen_callparams = ""
+
+_nig_doc_frozen_callparams_note = \
+    """See class definition for a detailed description of parameters."""
+
+nig_docdict_params = {
+    '_nig_doc_default_callparams': _nig_doc_default_callparams,
+    '_nig_doc_callparams_note': _nig_doc_callparams_note,
+    '_doc_random_state': _doc_random_state
+}
+
+nig_docdict_noparams = {
+    '_nig_doc_default_callparams': _nig_doc_frozen_callparams,
+    '_nig_doc_callparams_note': _nig_doc_frozen_callparams_note,
+    '_doc_random_state': _doc_random_state
+}
+
+
+_nig_doc_default_callparams = """\
+loc_x : array_like, optional
+    Mean of the Gaussian distribution (default is zero)
+scale_x : array_like, only positive values, optional
+    Scale on normal distribution prior (default is one)
+a : array_like, only positive values, optional
+    Shape of the inverse gamma distribution (default is one)
+b : array_like, only positive values, optional
+    Scale of inverse gamma distribution (default is one)
+"""
+
+_nig_doc_callparams_note = \
+    """The parameters `loc_x` and `scale_x` serves as the
+    hyperparameters for normal distribution which models the
+    unknown mean. The parameters `a` and `b` serve as
+    the hyperparameters for inverse gamma distribution which
+    models the unknown variance.
+    """
+
+_nig_doc_frozen_callparams = ""
+
+_nig_doc_frozen_callparams_note = \
+    """See class definition for a detailed description of parameters."""
+
+nig_docdict_params = {
+    '_nig_doc_default_callparams': _nig_doc_default_callparams,
+    '_nig_doc_callparams_note': _nig_doc_callparams_note,
+    '_doc_random_state': _doc_random_state
+}
+
+nig_docdict_noparams = {
+    '_nig_doc_default_callparams': _nig_doc_frozen_callparams,
+    '_nig_doc_callparams_note': _nig_doc_frozen_callparams_note,
+    '_doc_random_state': _doc_random_state
+}
+
+
+class norminvgamma_gen(multi_rv_generic):
+    r"""
+    A normal inverse gamma random variable.
+
+    Methods
+    -------
+    ``pdf(x, sigma2, loc_x=0, scale_x=1, a=1, b=1)``
+        Probability density function.
+    ``logpdf(x, sigma2, loc_x=0, scale_x=1, a=1, b=1)``
+        Log of the probability density function.
+    ``rvs(loc_x=0, scale_x=1, a=1, b=1, size=1, random_state=None)``
+        Draw random samples from the distribution.
+    ``mean(loc_x=0, scale_x=1, a=1, b=1)``
+        Mean of the distribution.
+    ``cov(loc_x=0, scale_x=1, a=1, b=1)``
+        Covariance matrix of the distribution.
+
+    Parameters
+    ----------
+    x : array_like
+    sigma2 : array_like, only positive numbers
+    %(_nig_doc_default_callparams)s
+    %(_doc_random_state)s
+
+    Alternatively, the object may be called (as a function) to fix the
+    loc_x, scale_x, a, b parameters, returning a "frozen" normal inverse
+    gamma random variable:
+
+    rv = norminvgamma(loc_x=0, scale_x=1, a=1, b=1)
+        - Frozen object with the same methods but holding the given
+          loc_x, scale_x, a, b.
+
+    Notes
+    -----
+    %(_nig_doc_callparams_note)s
+
+    If we write `m=loc_x` and `s=scale_x`, the probability density function of
+    `norminvgamma` with parameters `loc_x, scale_x, a, b` is given by
+
+    .. math::
+
+        f(x,\sigma^2; m, s, a, b) = \frac {1} {\sqrt{2\pi \sigma^2 s^2} } \,
+        \frac{b^a}{\Gamma(a)} \, \left( \frac{1}{\sigma^2} \right)^{a + 1} \,
+        \exp \left( - \frac {2 b \, s^2 + (x - m)^2}{2s^2\sigma^2} \right),
+
+    where `x` is a real number and :math:`\sigma^2 > 0`.
+
+    Suppose that `Y` has a standard normal distribution, `V` has an inverse
+    gamma distribution with shape parameter `a` and the random variables are
+    independent. Set  `sigma2 = b * V` and
+    `X = loc_x + scale_x * sqrt(sigma2) * Y`.
+    Then `(X, sigma2)` follows a normal inverse gamma distribution with
+    parameters `loc_x, scale_x, a, b`. In particular, conditional on `sigma2`,
+    `X` is normally distributed with mean m and variance `scale_x^2 * sigma2`,
+    whereas `sigma2` has an inverse gamma distribution with shape `a` and
+    scale `b`.
+
+    .. versionadded:: 0.19.0
+
+    Examples
+    --------
+    >>> import matplotlib.pyplot as plt
+    >>> x, sigma2 = norminvgamma.rvs(loc_x=0, scale_x=1, a=5, b=2, size=1000)
+    >>> # show histograms of x and sigma2
+    >>> fig, ax = plt.subplots(nrows=1, ncols=2)
+    >>> ax = plt.subplot(121)
+    >>> ax.hist(x, normed=True, bins=30)
+    >>> ax = plt.subplot(122)
+    >>> ax.hist(sigma2, normed=True, bins=30, alpha=0.6)
+    >>> plt.show()
+
+    """
+    def __init__(self, seed=None):
+        super(norminvgamma_gen, self).__init__(seed)
+        self.__doc__ = doccer.docformat(self.__doc__, nig_docdict_params)
+
+    def __call__(self, loc_x=0, scale_x=1, a=1, b=1, seed=None):
+        """
+        Create a frozen normal inverse gamma distribution.
+
+        See `norminvgamma_frozen` for more information.
+
+        """
+        return norminvgamma_frozen(loc_x, scale_x, a, b, seed=seed)
+
+    def _check_parameters_helper(self, x, pos=False):
+        x = np.asarray(x)
+        if pos:
+            if np.any(x <= 0):
+                raise ValueError("All values must be greater than 0")
+        if x.ndim > 1:
+            raise ValueError("Parameter vector 'x' cannot have more than one, "
+                             "dimension, but x.ndim = %s." % x.ndim)
+        return x
+
+    def _check_input(self, x, sigma2):
+        x, sigma2 = np.asarray(x), np.asarray(sigma2)
+        if np.any(sigma2 <= 0):
+            raise ValueError("All values of 'sigma2' must be greater than 0")
+        if x.shape != sigma2.shape:
+            raise ValueError("Vectors 'x' and 'sigma2' must have the same ",
+                             "shape, but x.shape = %s and sigma2.shape = %s."
+                             % (x.shape, sigma2.shape))
+        return x, sigma2
+
+    def _check_parameters(self, loc_x, scale_x, a, b):
+        loc_x = self._check_parameters_helper(loc_x)
+        scale_x = self._check_parameters_helper(scale_x, pos=True)
+        a = self._check_parameters_helper(a, pos=True)
+        b = self._check_parameters_helper(b, pos=True)
+        s_a = a.shape
+        if ((s_a != b.shape) | (s_a != loc_x.shape) | (s_a != scale_x.shape)):
+            raise ValueError("Vectors 'loc_x', 'scale_x', 'a', 'b' must have "
+                             "same shape, but their shapes are %s, %s, %s, %s."
+                             % (loc_x.shape, scale_x.shape, a.shape, b.shape))
+        return loc_x, scale_x, a, b
+
+    def logpdf(self, x, sigma2, loc_x=0, scale_x=1, a=1, b=1):
+        """
+        Log of the normal inverse gamma probability density function.
+
+        Parameters
+        ----------
+        x : array_like
+        sigma2 : array_like, only positive numbers
+        %(_nig_doc_default_callparams)s
+
+        Returns
+        -------
+        pdf : ndarray or scalar
+            Log of the probability density function evaluated at `(x, sigma2)`.
+
+        """
+        loc_x, scale_x, a, b = self._check_parameters(loc_x, scale_x, a, b)
+        x, sigma2 = self._check_input(x, sigma2)
+        s_sq = scale_x**2
+        to_exp = -(2 * s_sq * b + (x - loc_x)**2) / (2 * s_sq * sigma2)
+        denm = np.sqrt(2 * np.pi * s_sq * sigma2) * gamma(a) * sigma2**(a+1)
+        return _squeeze_output(a * np.log(b) + to_exp - np.log(denm))
+
+    def pdf(self, x, sigma2, loc_x=0, scale_x=1, a=1, b=1):
+        """
+        Normal inverse gamma probability density function.
+
+        Parameters
+        ----------
+        x : array
+        sigma2 : array, only positive numbers
+        %(_nig_doc_default_callparams)s
+
+        Returns
+        -------
+        pdf : ndarray
+            Probability density function evaluated at `(x, sigma2)`.
+
+        Notes
+        -----
+        %(_nig_doc_callparams_note)s
+
+        """
+        loc_x, scale_x, a, b = self._check_parameters(loc_x, scale_x, a, b)
+        x, sigma2 = self._check_input(x, sigma2)
+        s_sq = scale_x**2
+
+        to_exp = -(2 * s_sq * b + (x - loc_x)**2) / (2 * s_sq * sigma2)
+        denm = np.sqrt(2 * np.pi * s_sq * sigma2) * gamma(a) * sigma2**(a+1)
+        return _squeeze_output(b**a * np.exp(to_exp) / denm)
+
+    def rvs(self, loc_x=0, scale_x=1, a=1, b=1, size=1, random_state=None):
+        """
+        Draw random samples from normal inverse gamma distribution.
+
+        Parameters
+        ----------
+        %(_nig_doc_default_callparams)s
+        size : integer, optional
+            Number of samples to draw (default is 1).
+        %(_doc_random_state)s
+
+        Returns
+        -------
+        rvs : tuple of ndarray or tuple of scalar
+            Tuple of random variates X, sigma2.
+
+        Notes
+        -----
+        %(_nig_doc_callparams_note)s
+
+        """
+        loc_x, scale_x, a, b = self._check_parameters(loc_x, scale_x, a, b)
+        random_state = self._get_random_state(random_state)
+        # note: if X is gamma(a,b), then 1/X is invgamma(a, 1/b)
+        sigma2 = 1./random_state.gamma(shape=a, scale=1./b, size=size)
+        x = loc_x + scale_x * np.sqrt(sigma2) * random_state.normal(size=size)
+        return _squeeze_output(x), _squeeze_output(sigma2)
+
+    def mean(self, loc_x=0, scale_x=1, a=1, b=1):
+        """
+        Compute the mean of the distribution.
+
+        Parameters
+        ----------
+        %(_nig_doc_default_callparams)s
+
+        Returns
+        -------
+        (x, s) : tuple of ndarray or tuple of scalar
+            Mean of distribution
+
+        Notes
+        -----
+        %(_nig_doc_callparams_note)s
+
+        """
+        loc_x, scale_x, a, b = self._check_parameters(loc_x, scale_x, a, b)
+        sigma2_mean = np.where(a > 1, b / (a - 1), np.full(a.shape, np.inf))
+        return _squeeze_output(loc_x), _squeeze_output(sigma2_mean)
+
+    def cov(self, loc_x=0, scale_x=1, a=1, b=1):
+        """
+        Compute the variance of the distribution.
+
+        Parameters
+        ----------
+        %(_nig_doc_default_callparams)s
+
+        Returns
+        -------
+        (x, s) : tuple of ndarray or tuple of scalar values
+            Variance of X and sigma2.
+
+        Notes
+        -----
+        %(_nig_doc_callparams_note)s
+        Note that X and sigma2 are uncorrelated, hence, the non-diagonal
+        elements of the 2x2 covariance matrix of (X, sigma2) are zero.
+        The function only returns the variance for simplicity.
+        """
+        loc_x, scale_x, a, b = self._check_parameters(loc_x, scale_x, a, b)
+        inf_vec = np.full(a.shape, np.inf)
+        x_var = np.where(a > 1, scale_x**2 * b / (a - 1), inf_vec)
+        sigma2_var = np.where(a > 2, b**2 / ((a - 1)**2 * (a - 2)), inf_vec)
+        return _squeeze_output(x_var), _squeeze_output(sigma2_var)
+
+norminvgamma = norminvgamma_gen()
+
+
+class norminvgamma_frozen(multi_rv_frozen):
+    """
+    Create a frozen normal inverse gamma distribution.
+
+    Parameters
+    ----------
+    loc_x : float, optional
+        Mean of the distribution (default is zero)
+    scale_x : positive float, optional
+        Scale on normal distribution (default is one)
+    a : positive float, optional
+        Shape on inverse gamma distribution (default is one)
+    b : positive float, optional
+        Scale on inverse gamma distribution (default is one)
+    seed : None or int or np.random.RandomState instance, optional
+        This parameter defines the RandomState object to use for drawing
+        random variates.
+        If None (or np.random), the global np.random state is used.
+        If integer, it is used to seed the local RandomState instance
+        Default is None.
+
+    Examples
+    --------
+    When called with the default parameters, this will create a 2D random
+    variable with loc_x = 0, scale_x = 1, a = 1, b = 1:
+
+    >>> from scipy.stats import norminvgamma
+    >>> r = norminvgamma()
+    >>> r.loc_x, r.scale_x, r.a, r.b
+    (array(0), array(1), array(1), array(1))
+    """
+    def __init__(self, loc_x=0, scale_x=1, a=1, b=1, seed=None):
+        self._dist = norminvgamma_gen(seed)
+        l_x, s_x, a, b = self._dist._check_parameters(loc_x, scale_x, a, b)
+        self.loc_x, self.scale_x, self.a, self.b = l_x, s_x, a, b
+
+    def logpdf(self, x, sigma2):
+        return self._dist.logpdf(x, sigma2, self.loc_x, self.scale_x,
+                                 self.a, self.b)
+
+    def pdf(self, x, sigma2):
+        return self._dist.pdf(x, sigma2, self.loc_x, self.scale_x,
+                              self.a, self.b)
+
+    def rvs(self, size=1, random_state=None):
+        return self._dist.rvs(self.loc_x, self.scale_x, self.a, self.b,
+                              size, random_state)
+
+    def mean(self):
+        return self._dist.mean(self.loc_x, self.scale_x, self.a, self.b)
+
+    def cov(self):
+        return self._dist.cov(self.loc_x, self.scale_x, self.a, self.b)
+
+
+# Set frozen generator docstrings from corresponding docstrings in
+# norminvgamma_gen and fill in default strings in class docstrings
+for name in ['logpdf', 'pdf', 'rvs', 'cov']:
+    method = norminvgamma_gen.__dict__[name]
+    method_frozen = norminvgamma_frozen.__dict__[name]
+    method_frozen.__doc__ = doccer.docformat(method.__doc__, nig_docdict_noparams)
+    method.__doc__ = doccer.docformat(method.__doc__, nig_docdict_params)
