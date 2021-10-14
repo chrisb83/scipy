@@ -1888,3 +1888,281 @@ cdef class NaiveRatioUniforms(Method):
             raise ValueError("`u_min` must be smaller than `u_max`.")
 
         return domain, r, u_min, u_max, v_max
+
+
+cdef class AutomaticRatioUniforms(Method):
+    r"""
+    AutomaticRatioUniforms(dist, *, mode=None, center=None, domain=None, construction_points=30, use_dars=True, max_squeeze_hat_ratio=0.99, max_segments=100, guide_factor=2, random_state=None)
+
+    Automatic Ratio-of-Uniforms (AROU).
+
+    AROU is a variant of the Ratio-of-Uniforms (ROU) method. It uses the fact
+    that the acceptance region of the ROU method is convex for many
+    distributions. This allows to construct enclosing polygons of the region.
+    It works for all T-concave distributions with :math:`T(x) = -1/\sqrt{x}`.
+
+    Parameters
+    ----------
+    dist : object
+        An instance of a class with ``pdf`` and ``dpdf`` methods.
+
+        * ``pdf``: PDF of the distribution. The signature of the PDF is
+          expected to be: ``def pdf(self, x: float) -> float``. i.e.
+          the PDF should accept a Python float and
+          return a Python float. It doesn't need to integrate to 1 i.e.
+          the PDF doesn't need to be normalized.
+        * ``dpdf``: Derivative of the PDF w.r.t x (i.e. the variate). Must
+          have the same signature as the PDF.
+
+    mode : float, optional
+        (Exact) Mode of the distribution. Default is ``None``.
+
+    center : float, optional
+        Approximate location of the mode or the mean of the distribution.
+        This location provides some information about the main part of the
+        PDF and is used to avoid numerical problems. Default is ``None``.
+
+    domain : list or tuple of length 2, optional
+        The support of the distribution.
+        Default is ``None``. When ``None``:
+
+        * If a ``support`` method is provided by the distribution object
+          `dist`, it is used to set the domain of the distribution.
+        * Otherwise the support is assumed to be :math:`(-\infty, \infty)`.
+
+    construction_points : int or array_like, optional
+        If an integer, it defines the number of construction points. If it
+        is array-like, the elements of the array are used as construction
+        points. Default is 30.
+
+    use_dars : bool, optional
+        If True, "derandomized adaptive rejection sampling" (DARS) is used
+        in setup. See [1]_ for the details of the DARS algorithm. Default
+        is True.
+
+    max_squeeze_hat_ratio : float, optional
+        Set upper bound for the ratio (area below squeeze) / (area below hat).
+        It must be a number between 0 and 1. Default is 0.99.
+
+    max_segments : int, optional
+        Set maximum number of segments. No construction points are added after
+        the setup when the number of segments exceeds this value.
+        Default is 100.
+
+    guide_factor : float, optional
+        Set factor for relative size of the guide table for indexed search.
+        It must be greater than or equal to 0. When set to 0, then sequential
+        search is used. Default is 2.
+
+    random_state : {None, int, `numpy.random.Generator`,
+                        `numpy.random.RandomState`}, optional
+
+        A NumPy random number generator or seed for the underlying NumPy random
+        number generator used to generate the stream of uniform random numbers.
+        If `random_state` is None (or `np.random`), the `numpy.random.RandomState`
+        singleton is used.
+        If `random_state` is an int, a new ``RandomState`` instance is used,
+        seeded with `random_state`.
+        If `random_state` is already a ``Generator`` or ``RandomState`` instance
+        then that instance is used.
+
+    Notes
+    -----
+
+    For densities with modes not close to zero, it is suggested to set either
+    `mode` or `center`. The latter is the approximate location of the mode or
+    the mean of the distribution. This location provides some information
+    about the main part of the PDF and is used to avoid numerical problems.
+
+    References
+    ----------
+    .. [1] UNU.RAN reference manual, Section 5.3.1,
+           "TDR - Automatic Ratio-Of-Uniforms method",
+           http://statmath.wu.ac.at/software/unuran/doc/unuran.html#AROU
+    .. [2] Leydold, Josef. "Automatic sampling with the Ratio-of-Uniforms
+           method." ACM Transactions on Mathematical Software (TOMS) 26(1),
+           (2000): 78-98.
+
+    Examples
+    --------
+    >>> from scipy.stats import AutomaticRatioUniforms
+
+    Suppose we have a density:
+
+    .. math::
+
+        f(x) = \begin{cases}
+                1 - x^2,  &  -1 \leq x \leq 1 \\
+                0,        &  \text{otherwise}
+               \end{cases}
+
+    It is easy to check that :math:`T(f(x)) = -1/\sqrt{1-x^2}` is concave where
+    :math:`T(x) = -1/\sqrt{x}`. Thus, we can use AROU to generate random
+    variates of this distribution.
+    The derivative of this density function is:
+
+    .. math::
+
+        \frac{df(x)}{dx} = \begin{cases}
+                            -2x,  &  -1 \leq x \leq 1 \\
+                            0,    &  \text{otherwise}
+                           \end{cases}
+
+    Notice that the PDF doesn't integrate to 1. As this is a rejection based
+    method, we need not have a normalized PDF. To initialize the generator,
+    we can use:
+
+    >>> urng = np.random.default_rng()
+    >>> class MyDist:
+    ...     def pdf(self, x):
+    ...         return 1-x*x
+    ...     def dpdf(self, x):
+    ...         return -2*x
+    ...
+    >>> dist = MyDist()
+    >>> rng = AutomaticRatioUniforms(dist, domain=(-1, 1), random_state=urng)
+
+    Domain can be very useful to truncate the distribution but to avoid passing
+    it everytime to the constructor, a default domain can be set by providing a
+    `support` method in the distribution object (`dist`):
+
+    >>> class MyDist:
+    ...     def pdf(self, x):
+    ...         return 1-x*x
+    ...     def dpdf(self, x):
+    ...         return -2*x
+    ...     def support(self):
+    ...         return (-1, 1)
+    ...
+    >>> dist = MyDist()
+    >>> rng = AutomaticRatioUniforms(dist, random_state=urng)
+
+    Now, we can use the `rvs` method to generate samples from the distribution:
+
+    >>> rvs = rng.rvs(1000)
+
+    We can check that the samples are from the given distribution by visualizing
+    its histogram:
+
+    >>> import matplotlib.pyplot as plt
+    >>> x = np.linspace(-1, 1, 1000)
+    >>> fx = 3/4 * dist.pdf(x)  # 3/4 is the normalizing constant
+    >>> plt.plot(x, fx, 'r-', lw=2, label='true distribution')
+    >>> plt.hist(rvs, bins=20, density=True, alpha=0.8, label='random variates')
+    >>> plt.xlabel('x')
+    >>> plt.ylabel('PDF(x)')
+    >>> plt.title('Automatic Ratio-of-Uniforms Samples')
+    >>> plt.legend()
+    >>> plt.show()
+
+    """
+    cdef double[::1] construction_points_array
+
+    def __cinit__(self,
+                  dist,
+                  *,
+                  mode=None,
+                  center=None,
+                  domain=None,
+                  construction_points=30,
+                  use_dars=True,
+                  max_squeeze_hat_ratio=0.99,
+                  max_segments=100,
+                  guide_factor=2,
+                  random_state=None):
+        (domain, construction_points) = self._validate_args(dist, domain, construction_points)
+
+        # save all the arguments for pickling support
+        self._kwargs = {
+            'dist': dist,
+            'mode': mode,
+            'center': center,
+            'domain': domain,
+            'construction_points': construction_points,
+            'use_dars': use_dars,
+            'max_squeeze_hat_ratio': max_squeeze_hat_ratio,
+            'max_segments': max_segments,
+            'guide_factor': guide_factor,
+            'random_state': random_state
+        }
+
+        cdef:
+            unur_distr *distr
+            unur_par *par
+            unur_gen *rng
+
+        self.callbacks = _unpack_dist(dist, "cont", meths=["pdf", "dpdf"])
+        def _callback_wrapper(x, name):
+            return self.callbacks[name](x)
+        self._callback_wrapper = _callback_wrapper
+        self._messages = MessageStream()
+        _lock.acquire()
+        try:
+            unur_set_stream(self._messages.handle)
+
+            self.distr = unur_distr_cont_new()
+            if self.distr == NULL:
+                raise UNURANError(self._messages.get())
+            _pack_distr(self.distr, self.callbacks)
+
+            if mode is not None:
+                self._check_errorcode(unur_distr_cont_set_mode(self.distr, mode))
+            if center is not None:
+                self._check_errorcode(unur_distr_cont_set_center(self.distr, center))
+
+            if domain is not None:
+                self._check_errorcode(unur_distr_cont_set_domain(self.distr, domain[0],
+                                                                 domain[1]))
+
+            self.par = unur_arou_new(self.distr)
+            if self.par == NULL:
+                raise UNURANError(self._messages.get())
+            if self.construction_points_array is None:
+                self._check_errorcode(unur_arou_set_cpoints(self.par, construction_points, NULL))
+            else:
+                self._check_errorcode(unur_arou_set_cpoints(self.par, len(self.construction_points_array),
+                                                           &self.construction_points_array[0]))
+
+
+            self._check_errorcode(unur_arou_set_usedars(self.par, use_dars))
+            self._check_errorcode(unur_arou_set_max_sqhratio(self.par, max_squeeze_hat_ratio))
+            self._check_errorcode(unur_arou_set_max_segments(self.par, max_segments))
+            self._check_errorcode(unur_arou_set_guidefactor(self.par, guide_factor))
+
+            self._set_rng(random_state)
+        finally:
+            _lock.release()
+
+    cdef object _validate_args(self, dist, domain, construction_points):
+        domain = _validate_domain(domain, dist)
+        if not np.isscalar(construction_points):
+            self.construction_points_array = np.ascontiguousarray(construction_points,
+                                                                  dtype=np.float64)
+            if len(self.construction_points_array) == 0:
+                raise ValueError("`construction_points` must either be a scalar or a "
+                                 "non-empty array.")
+        else:
+            self.construction_points_array = None
+            if (construction_points <= 0 or
+                construction_points != int(construction_points)):
+                raise ValueError("`construction_points` must be a positive integer.")
+
+        return domain, construction_points
+
+    @property
+    def squeeze_hat_ratio(self):
+        """
+        Get the current ratio (area below squeeze) / (area below hat) for the
+        generator.
+        """
+        return unur_arou_get_sqhratio(self.rng)
+
+    @property
+    def hat_area(self):
+        """Get the area below the hat for the generator."""
+        return unur_arou_get_hatarea(self.rng)
+
+    @property
+    def squeeze_area(self):
+        """Get the area below the squeeze for the generator."""
+        return unur_arou_get_squeezearea(self.rng)
